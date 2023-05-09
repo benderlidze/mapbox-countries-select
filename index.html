@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Create a hover effect</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <script>
+
+        const supportiedCountries = [
+            'United States of America',
+            "Brazil",
+            "Spain",
+            "France"
+        ].map(d => d.toLowerCase())
+
+        const mainData = {
+            countries: [],
+        }
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlcnQiLCJhIjoiY2s3bHNtdjF2MDJ1eTNmcGowanU5MHR4ZiJ9.hzhWj9bhgD5itpWAPc3nNA';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [0, 0],
+            zoom: 1,
+            projection: 'naturalEarth' // starting projection
+        });
+        let hoveredCountryId = null;
+
+        map.on('load', () => {
+
+            fetch('countries_mini.json')
+                .then(d => d.json())
+                .then(data => {
+
+                    const countries = topojson.feature(data, data.objects.countries)
+                    countries.features.forEach((el, key) => {
+                        el.id = key
+                        el.properties.id = key
+                        el.properties.color = supportiedCountries.map(d => d.toLowerCase()).includes(el.properties.ADMIN.toLowerCase()) ? 'green' : 'red'
+                    });
+                    console.log('countries', countries);
+
+                    mainData.countries.push(...countries.features)
+                    map.getSource('countries').setData(countries)
+                })
+
+            map.addSource('countries', {
+                'type': 'geojson',
+                'data': { type: 'FeatureCollection', features: Array(0) }
+            });
+
+            // The feature-state dependent fill-opacity expression will render the hover effect
+            // when a feature's hover state is set to true.
+            map.addLayer({
+                'id': 'countries-fills',
+                'type': 'fill',
+                'source': 'countries',
+                'layout': {},
+                'paint': {
+                    'fill-color': ['get', 'color'],
+                    'fill-opacity': [
+                        'case',
+                        ['boolean', ['feature-state', 'hover'], false],
+                        1,
+                        0.3
+                    ]
+                }
+            });
+
+            map.addLayer({
+                'id': 'countries-borders',
+                'type': 'line',
+                'source': 'countries',
+                'layout': {},
+                'paint': {
+                    'line-color': 'white',
+                    'line-width': 0
+                }
+            });
+
+            // When the user moves their mouse over the state-fill layer, we'll update the
+            // feature state for the feature under the mouse.
+            map.on('click', 'countries-fills', (e) => {
+                console.log('e.features.length', e.features[0]);
+                const props = e.features[0].properties
+                const name = props.ADMIN
+                if (supportiedCountries.includes(name.toLowerCase())) {
+                    alert("This country is supported")
+                } else {
+                    alert("This country is not supported")
+                }
+            });
+
+            map.on('mousemove', 'countries-fills', (e) => {
+                if (e.features.length > 0) {
+                    if (hoveredCountryId !== null) {
+                        map.setFeatureState(
+                            { source: 'countries', id: hoveredCountryId },
+                            { hover: false }
+                        );
+                    }
+                    hoveredCountryId = e.features[0].id;
+                    map.setFeatureState(
+                        { source: 'countries', id: hoveredCountryId },
+                        { hover: true }
+                    );
+                }
+            });
+
+            // When the mouse leaves the state-fill layer, update the feature state of the
+            // previously hovered feature.
+            map.on('mouseleave', 'countries-fills', () => {
+                if (hoveredCountryId !== null) {
+                    map.setFeatureState(
+                        { source: 'countries', id: hoveredCountryId },
+                        { hover: false }
+                    );
+                }
+                hoveredCountryId = null;
+            });
+        });
+    </script>
+
+</body>
+
+</html>
